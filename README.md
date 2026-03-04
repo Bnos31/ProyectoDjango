@@ -28,32 +28,40 @@ Este es un sistema de Help Desk de mantenimiento desarrollado en Django 5 y Post
 2. El usuario por defecto configurado en `settings.py` es `postgres` con contraseña `postgres` en `localhost:5432`.
    - Puedes cambiar estos valores en `helpdesk_project/settings.py` si es necesario.
 
-## Migraciones e Inicialización
+## Pasos de Configuración Inicial (solo una vez)
 
-1. Aplicar las migraciones a la base de datos:
+1. Levantar la base de datos con Docker:
    ```bash
+   docker-compose up -d
+   ```
+
+2. Crear y aplicar las migraciones a la base de datos:
+   ```bash
+   python manage.py makemigrations helpdesk
    python manage.py migrate
    ```
 
-2. Crear los grupos y permisos básicos (Comando personalizado):
+3. Crear los grupos y permisos básicos:
    ```bash
    python manage.py setup_roles
    ```
 
-3. Crear un superusuario temporal (para acceso ADMIN total al admin de Django y al sistema):
+4. Crear un superusuario (acceso total al sistema):
    ```bash
    python manage.py createsuperuser
    ```
-   *Nota: Asignarle el grupo ADMIN o usarlo directamente como superusuario.*
+   *En el panel `/admin/`, asigna el grupo ADMIN/SUPERVISOR/TECNICO a los usuarios que necesites.*
 
-## Ejecución
+## Ejecución Diaria
 
-1. Iniciar el servidor de desarrollo:
-   ```bash
-   python manage.py runserver
-   ```
+Cada vez que quieras trabajar, simplemente ejecuta:
 
-2. Acceder al sistema en `http://127.0.0.1:8000/`.
+```bash
+docker-compose up -d       # Levanta la base de datos (si no está corriendo)
+python manage.py runserver # Levanta el servidor Django
+```
+
+Accede al sistema en `http://127.0.0.1:8000/` y al panel de administración en `http://127.0.0.1:8000/admin/`.
 
 ## Subida de Archivos Adjuntos
 

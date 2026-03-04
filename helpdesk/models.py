@@ -66,7 +66,7 @@ class ComentarioIncidencia(models.Model):
 class AdjuntoIncidencia(models.Model):
     incidencia = models.ForeignKey(Incidencia, on_delete=models.CASCADE, related_name='adjuntos')
     subido_por = models.ForeignKey(User, on_delete=models.CASCADE)
-    archivo = models.FileField(upload_form='adjuntos/%Y/%m/%d/')
+    archivo = models.FileField(upload_to='adjuntos/%Y/%m/%d/')
     created_at = models.DateTimeField(auto_now_add=True)
 
 class AuditoriaAccion(models.Model):
