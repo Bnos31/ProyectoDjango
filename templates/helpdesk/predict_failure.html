@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 mt-4">
+        <div class="card shadow border-{{ badge_class }}">
+            <div class="card-header bg-{{ badge_class }} text-white d-flex align-items-center justify-content-between">
+                <h4 class="mb-0">Predicción de Falla por Mantenimiento</h4>
+                <i class="bi bi-cpu-fill" style="font-size: 1.5rem;"></i>
+            </div>
+            <div class="card-body p-4 text-center">
+                <h5 class="text-secondary mb-3">Equipo Analizado (ID: {{ equipo.id }})</h5>
+                <h2 class="mb-4"><strong>{{ equipo.nombre }}</strong> <small class="text-muted">({{ equipo.codigo
+                        }})</small></h2>
+
+                <hr class="mb-4">
+
+                <h6 class="text-uppercase text-muted">Probabilidad de Falla Crítica</h6>
+                <h1 class="display-3 text-{{ badge_class }} mb-0">{{ probabilidad }}%</h1>
+
+                <div class="alert alert-{{ badge_class }} mt-4 mb-2">
+                    Nivel de Riesgo Previsto: <strong>{{ nivel_riesgo }}</strong>
+                </div>
+
+                {% if nivel_riesgo == "Alto" %}
+                <p class="text-danger small mt-2">
+                    * Sugerencia: El modelo estima un nivel de colapso superior al 70%. Ejecutar un peritaje técnico o
+                    dar de baja equipo es crítico.
+                </p>
+                {% elif nivel_riesgo == "Medio" %}
+                <p class="text-warning small mt-2">
+                    * Sugerencia: Establecer cronograma de reparación en los siguientes 7 días para evitar una parada
+                    abrupta del dispositivo.
+                </p>
+                {% else %}
+                <p class="text-success small mt-2">
+                    * Sugerencia: Funcionalidad óptima predecida. Operar con normalidad y atenerse si ocurren
+                    imprevistos.
+                </p>
+                {% endif %}
+            </div>
+
+            <div class="card-footer bg-light text-center">
+                <a href="{% url 'equipo_list' %}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver a
+                    Equipos</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

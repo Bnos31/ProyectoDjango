@@ -13,10 +13,46 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U helpdesk_user -d helpdesk_db" ]
+      test: ["CMD-SHELL", "pg_isready -U helpdesk_user -d helpdesk_db"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: helpdesk_ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Ollama no tiene el modelo descargado de inicio. Se requiere descargar luego "docker exec -it helpdesk_ollama ollama run llama3"
+
+  django:
+    build: .
+    container_name: helpdesk_django
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - POSTGRES_DB=helpdesk_db
+      - POSTGRES_USER=helpdesk_user
+      - POSTGRES_PASSWORD=helpdesk_pass
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - CHROMA_PERSIST_DIR=/vectorstore
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3
+    volumes:
+      - .:/app
+      - vectorstore:/vectorstore
+      - media:/app/media
+
 volumes:
   pgdata:
+  ollama_data:
+  vectorstore:
+  media:

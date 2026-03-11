@@ -78,3 +78,14 @@ class AuditoriaAccion(models.Model):
 
     def __str__(self):
         return f"{self.usuario.username} - {self.accion} - {self.created_at}"
+
+class DocumentoRAG(models.Model):
+    nombre = models.CharField(max_length=255)
+    archivo = models.FileField(upload_to='rag_docs/%Y/%m/')
+    sha256 = models.CharField(max_length=64, blank=True)
+    size = models.BigIntegerField(default=0)
+    indexed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.nombre

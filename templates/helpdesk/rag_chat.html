@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white d-flex align-items-center justify-content-between">
+                <h4 class="mb-0">Chat RAG - Asistente Help Desk</h4>
+                <small class="badge bg-primary">IA</small>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">Haz cualquier pregunta y el sistema buscará la respuesta en la base de
+                    conocimientos documental usando Inteligencia Artificial.</p>
+
+                {% if respuesta %}
+                <div class="mb-4">
+                    <div class="alert alert-secondary">
+                        <strong>Usuario:</strong> {{ request.POST.pregunta }}
+                    </div>
+                    <div class="alert alert-success">
+                        <strong>Asistente IA:</strong>
+                        <p class="mb-0 mt-2">{{ respuesta|linebreaksbr }}</p>
+                    </div>
+
+                    {% if fuentes %}
+                    <div class="mt-2 text-muted">
+                        <small><strong>Fuentes consultadas:</strong></small>
+                        <ul class="mb-0">
+                            {% for f in fuentes %}
+                            <li><small>{{ f }}</small></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <hr>
+                <form method="post">
+                    {% csrf_token %}
+                    {{ form|crispy }}
+                    <div class="text-end mt-3">
+                        <button type="submit" class="btn btn-primary px-4">Consultar IA</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

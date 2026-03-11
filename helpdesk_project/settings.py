@@ -63,15 +63,15 @@ TEMPLATES = [
 WSGI_APPLICATION = 'helpdesk_project.wsgi.application'
 
 # Database
-# PostgreSQL settings configured as requested.
+# PostgreSQL settings adaptados a correr en Docker Compose o Standalone
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'helpdesk_db',
-        'USER': 'helpdesk_user',
-        'PASSWORD': 'helpdesk_pass',
-        'HOST': '127.0.0.1',
-        'PORT': '5433',
+        'NAME': os.environ.get('POSTGRES_DB', 'helpdesk_db'),
+        'USER': os.environ.get('POSTGRES_USER', 'helpdesk_user'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'helpdesk_pass'),
+        'HOST': os.environ.get('POSTGRES_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5433'),
     }
 }
 
@@ -104,3 +104,21 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
+
+# ============================================================
+# RAG CONFIG (OFFLINE ONLY)
+# ============================================================
+import os
+
+# Ruta donde ChromaDB va a persistir el índice vectorial en disco.
+# "/vectorstore" si está en docker, o dentro del BASE_DIR si es local
+CHROMA_PERSIST_DIR = os.environ.get('CHROMA_PERSIST_DIR', str(BASE_DIR / 'vectorstore'))
+
+# Nombre de la colección en ChromaDB.
+CHROMA_COLLECTION_NAME = 'helpdesk_rag'
+
+# URL base de Ollama (Apuntando a http://ollama:11434 por defecto para el docker-compose)
+OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://ollama:11434')
+
+# Modelo de Ollama a usar
+OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3')

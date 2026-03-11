@@ -3,3 +3,16 @@ psycopg2-binary==2.9.9
 django-crispy-forms==2.1
 crispy-bootstrap5==2023.10
 pillow==10.2.0
+
+# Dependencias RAG
+langchain==0.1.13
+langchain-community==0.0.29
+chromadb==0.4.24
+pypdf==4.1.0
+docx2txt==0.8
+sentence-transformers==2.5.1
+
+# Dependencias Machine Learning
+pandas
+scikit-learn
+joblib

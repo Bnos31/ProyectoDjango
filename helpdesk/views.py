@@ -6,9 +6,12 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.db.models import Count
 from django.contrib import messages
+import os
+import shutil
+from django.conf import settings
 
-from .models import Equipo, Incidencia, ComentarioIncidencia, AdjuntoIncidencia, AuditoriaAccion
-from .forms import EquipoForm, IncidenciaCreateForm, IncidenciaUpdateAdminForm, IncidenciaUpdateTecnicoForm, ComentarioForm, AdjuntoForm
+from .models import Equipo, Incidencia, ComentarioIncidencia, AdjuntoIncidencia, AuditoriaAccion, DocumentoRAG
+from .forms import EquipoForm, IncidenciaCreateForm, IncidenciaUpdateAdminForm, IncidenciaUpdateTecnicoForm, ComentarioForm, AdjuntoForm, DocumentoUploadForm, ChatForm
 from .decorators import has_group
 
 # Helper para loguear auditoría
@@ -213,4 +216,158 @@ def reportes(request):
         'conteo_tecnicos': conteo_tecnicos,
         'conteo_equipos': conteo_equipos,
         'auditoria': auditoria,
+    })
+
+# ============================
+# RAG VIEWS
+# ============================
+@login_required
+def rag_upload_view(request):
+    if not has_group(request.user, ['ADMIN', 'SUPERVISOR']):
+        messages.error(request, "Acceso denegado. Solo ADMIN y SUPERVISOR pueden gestionar RAG.")
+        return redirect('dashboard')
+        
+    from .rag.utils import calculate_sha256
+    from .rag.services import load_documents, build_vectorstore
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'upload':
+            form = DocumentoUploadForm(request.POST, request.FILES)
+            if form.is_valid():
+                archivo = form.cleaned_data['archivo']
+                sha256 = calculate_sha256(archivo)
+                
+                # Evitar duplicados
+                if DocumentoRAG.objects.filter(sha256=sha256).exists():
+                    messages.warning(request, "Este documento ya fue subido anteriormente.")
+                else:
+                    doc = form.save(commit=False)
+                    doc.nombre = archivo.name
+                    doc.size = archivo.size
+                    doc.sha256 = sha256
+                    doc.save()
+                    
+                    try:
+                        # Extraer todo el texto usando los Loaders correspondientes
+                        documentos_crudos = load_documents(doc.archivo.path)
+                        
+                        # Inyectar metadata a cada fragmento antes de procesar
+                        for d in documentos_crudos:
+                            d.metadata['source_file'] = doc.nombre
+                            d.metadata['doc_id'] = doc.id
+                            
+                        # Chunking y embedding
+                        build_vectorstore(documentos_crudos)
+                        
+                        doc.indexed = True
+                        doc.save()
+                        messages.success(request, f"Documento '{doc.nombre}' indexado correctamente.")
+                    except Exception as e:
+                        messages.error(request, f"Error al indexar documento: {str(e)}")
+            else:
+                messages.error(request, "Error en el formulario.")
+                
+        elif action == 'reindex_all':
+            return redirect('rag_reindex_view')
+            
+    docs = DocumentoRAG.objects.all().order_by('-created_at')
+    form = DocumentoUploadForm()
+    
+    return render(request, 'helpdesk/rag_upload.html', {'docs': docs, 'form': form})
+
+@login_required
+def rag_reindex_view(request):
+    if not has_group(request.user, ['ADMIN', 'SUPERVISOR']):
+        return redirect('dashboard')
+        
+    from .rag.services import load_documents, build_vectorstore
+    
+    try:
+        # Borrar el directorio Chroma DB para reindexar de cero
+        if os.path.exists(settings.CHROMA_PERSIST_DIR):
+            shutil.rmtree(settings.CHROMA_PERSIST_DIR)
+            
+        docs = DocumentoRAG.objects.all()
+        for doc in docs:
+            doc.indexed = False
+            doc.save()
+            
+        for doc in docs:
+            try:
+                documentos_crudos = load_documents(doc.archivo.path)
+                for d in documentos_crudos:
+                    d.metadata['source_file'] = doc.nombre
+                    d.metadata['doc_id'] = doc.id
+                
+                build_vectorstore(documentos_crudos)
+                doc.indexed = True
+                doc.save()
+            except Exception as e:
+                pass
+        messages.success(request, "Reindexación completada para todos los documentos.")
+    except Exception as e:
+        messages.error(request, f"Error al reindexar: {str(e)}")
+        
+    return redirect('rag_upload_view')
+
+@login_required
+def rag_chat_view(request):
+    form = ChatForm()
+    respuesta = None
+    fuentes = []
+    
+    from .rag.services import rag_query
+    
+    if request.method == 'POST':
+        form = ChatForm(request.POST)
+        if form.is_valid():
+            pregunta = form.cleaned_data['pregunta']
+            try:
+                res = rag_query(pregunta)
+                respuesta = res['answer']
+                fuentes = res['sources']
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                messages.error(request, f"Error en RAG: {str(e)}")
+                
+    return render(request, 'helpdesk/rag_chat.html', {
+        'form': form,
+        'respuesta': respuesta,
+        'fuentes': fuentes
+    })
+
+# ============================
+# ML (MACHINE LEARNING) VIEWS
+# ============================
+@login_required
+def predict_equipment_failure(request, equipo_id):
+    """
+    Vista que predice si un equipo tendrá una falla crítica.
+    """
+    equipo = get_object_or_404(Equipo, pk=equipo_id)
+    
+    from .ml.predict import predict_failure
+    probabilidad = predict_failure(equipo)
+    
+    if probabilidad is None:
+        messages.warning(request, "El modelo predictivo no ha sido entrenado aún. Configura el módulo de ML usando 'python manage.py shell'.")
+        return redirect('equipo_list')
+        
+    nivel_riesgo = "Bajo"
+    badge_class = "success"
+    if probabilidad > 70:
+        nivel_riesgo = "Alto"
+        badge_class = "danger"
+    elif probabilidad > 30:
+        nivel_riesgo = "Medio"
+        badge_class = "warning"
+        
+    return render(request, 'helpdesk/predict_failure.html', {
+        'equipo': equipo,
+        'probabilidad': round(probabilidad, 2),
+        'nivel_riesgo': nivel_riesgo,
+        'badge_class': badge_class,
     })

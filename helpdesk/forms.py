@@ -1,5 +1,5 @@
 from django import forms
-from .models import Equipo, Incidencia, ComentarioIncidencia, AdjuntoIncidencia
+from .models import Equipo, Incidencia, ComentarioIncidencia, AdjuntoIncidencia, DocumentoRAG
 from django.contrib.auth.models import User
 
 class EquipoForm(forms.ModelForm):
@@ -49,3 +49,14 @@ class AdjuntoForm(forms.ModelForm):
     class Meta:
         model = AdjuntoIncidencia
         fields = ['archivo']
+
+class DocumentoUploadForm(forms.ModelForm):
+    class Meta:
+        model = DocumentoRAG
+        fields = ['archivo']
+        
+class ChatForm(forms.Form):
+    pregunta = forms.CharField(
+        widget=forms.TextInput(attrs={'placeholder': 'Escribe tu pregunta aquí...', 'class': 'form-control'}),
+        label=''
+    )

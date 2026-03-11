@@ -22,4 +22,12 @@ urlpatterns = [
     
     # Reportes
     path('reportes/', views.reportes, name='reportes'),
+    
+    # RAG
+    path('rag/cargar-documentos/', views.rag_upload_view, name='rag_upload_view'),
+    path('rag/cargar-documentos/reindexar/', views.rag_reindex_view, name='rag_reindex_view'),
+    path('rag/chat/', views.rag_chat_view, name='rag_chat_view'),
+    
+    # ML
+    path('ml/predict/<int:equipo_id>/', views.predict_equipment_failure, name='predict_failure'),
 ]

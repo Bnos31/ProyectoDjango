@@ -33,7 +33,11 @@
                     {% endif %}
                 </td>
                 <td>
-                    <a href="{% url 'equipo_editar' equipo.pk %}" class="btn btn-sm btn-primary">Editar</a>
+                    <div class="btn-group" role="group">
+                        <a href="{% url 'equipo_editar' equipo.pk %}" class="btn btn-sm btn-primary">Editar</a>
+                        <a href="{% url 'predict_failure' equipo.pk %}" class="btn btn-sm btn-outline-warning">Analizar
+                            IA</a>
+                    </div>
                 </td>
             </tr>
             {% empty %}
