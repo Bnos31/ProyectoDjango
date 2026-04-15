@@ -15,22 +15,22 @@
             <div class="col-auto">
                 <select name="estado" class="form-select">
                     <option value="">-- Todos los Estados --</option>
-                    <option value="PENDIENTE" {% if request.GET.estado=='PENDIENTE' %}selected{% endif %}>Pendiente
+                    <option value="PENDIENTE" {% if request.GET.estado == 'PENDIENTE' %}selected{% endif %}>Pendiente
                     </option>
-                    <option value="EN_PROCESO" {% if request.GET.estado=='EN_PROCESO' %}selected{% endif %}>En Proceso
+                    <option value="EN_PROCESO" {% if request.GET.estado == 'EN_PROCESO' %}selected{% endif %}>En Proceso
                     </option>
-                    <option value="RESUELTO" {% if request.GET.estado=='RESUELTO' %}selected{% endif %}>Resuelto
+                    <option value="RESUELTO" {% if request.GET.estado == 'RESUELTO' %}selected{% endif %}>Resuelto
                     </option>
-                    <option value="CERRADO" {% if request.GET.estado=='CERRADO' %}selected{% endif %}>Cerrado</option>
+                    <option value="CERRADO" {% if request.GET.estado == 'CERRADO' %}selected{% endif %}>Cerrado</option>
                 </select>
             </div>
             <div class="col-auto">
                 <select name="prioridad" class="form-select">
                     <option value="">-- Todas las Prioridades --</option>
-                    <option value="BAJA" {% if request.GET.prioridad=='BAJA' %}selected{% endif %}>Baja</option>
-                    <option value="MEDIA" {% if request.GET.prioridad=='MEDIA' %}selected{% endif %}>Media</option>
-                    <option value="ALTA" {% if request.GET.prioridad=='ALTA' %}selected{% endif %}>Alta</option>
-                    <option value="CRITICA" {% if request.GET.prioridad=='CRITICA' %}selected{% endif %}>Crítica
+                    <option value="BAJA" {% if request.GET.prioridad == 'BAJA' %}selected{% endif %}>Baja</option>
+                    <option value="MEDIA" {% if request.GET.prioridad == 'MEDIA' %}selected{% endif %}>Media</option>
+                    <option value="ALTA" {% if request.GET.prioridad == 'ALTA' %}selected{% endif %}>Alta</option>
+                    <option value="CRITICA" {% if request.GET.prioridad == 'CRITICA' %}selected{% endif %}>Crítica
                     </option>
                 </select>
             </div>

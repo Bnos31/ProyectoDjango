@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+
+    <!-- Encabezado -->
+    <div class="d-flex align-items-center mb-4">
+      <a href="{% url 'equipo_list' %}" class="btn btn-outline-secondary btn-sm me-3">&larr; Volver</a>
+      <h2 class="mb-0">Predicción de Falla Crítica</h2>
+    </div>
+
+    <!-- Tarjeta: Equipo -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Equipo analizado</h5>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Código</dt>
+          <dd class="col-sm-8">{{ equipo.codigo }}</dd>
+
+          <dt class="col-sm-4">Nombre</dt>
+          <dd class="col-sm-8">{{ equipo.nombre }}</dd>
+
+          <dt class="col-sm-4">Ubicación</dt>
+          <dd class="col-sm-8">{{ equipo.ubicacion|default:"—" }}</dd>
+
+          <dt class="col-sm-4">Total incidencias</dt>
+          <dd class="col-sm-8">{{ total_incidencias }}</dd>
+
+          <dt class="col-sm-4">Incidencias críticas/altas</dt>
+          <dd class="col-sm-8">{{ incidencias_criticas }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <!-- Tarjeta: Resultado de predicción -->
+    {% with p=resultado.porcentaje nivel=resultado.nivel_riesgo %}
+    <div class="card shadow-sm mb-4">
+      <div class="card-header
+        {% if nivel == 'Alto' %}bg-danger
+        {% elif nivel == 'Medio' %}bg-warning
+        {% else %}bg-success
+        {% endif %} text-white">
+        <h5 class="mb-0">Resultado del Modelo ML</h5>
+      </div>
+      <div class="card-body text-center py-4">
+
+        <!-- Probabilidad en grande -->
+        <p class="display-3 fw-bold mb-1
+          {% if nivel == 'Alto' %}text-danger
+          {% elif nivel == 'Medio' %}text-warning
+          {% else %}text-success
+          {% endif %}">
+          {{ p }}%
+        </p>
+        <p class="text-muted mb-3">Probabilidad de falla crítica</p>
+
+        <!-- Barra de progreso -->
+        <div class="progress mb-3" style="height: 24px;">
+          <div class="progress-bar
+            {% if nivel == 'Alto' %}bg-danger
+            {% elif nivel == 'Medio' %}bg-warning
+            {% else %}bg-success
+            {% endif %}"
+            role="progressbar"
+            style="width: {{ p }}%"
+            aria-valuenow="{{ p }}" aria-valuemin="0" aria-valuemax="100">
+            {{ p }}%
+          </div>
+        </div>
+
+        <!-- Badge de nivel de riesgo -->
+        <span class="badge fs-5
+          {% if nivel == 'Alto' %}bg-danger
+          {% elif nivel == 'Medio' %}bg-warning text-dark
+          {% else %}bg-success
+          {% endif %}">
+          Nivel de riesgo: {{ nivel }}
+        </span>
+
+        <!-- Leyenda de umbrales -->
+        <div class="mt-4">
+          <small class="text-muted">
+            <span class="badge bg-success">Bajo</span> 0–30% &nbsp;|&nbsp;
+            <span class="badge bg-warning text-dark">Medio</span> 30–70% &nbsp;|&nbsp;
+            <span class="badge bg-danger">Alto</span> 70–100%
+          </small>
+        </div>
+      </div>
+    </div>
+    {% endwith %}
+
+    <!-- Tarjeta: Datos de la última incidencia analizados -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">Datos analizados (última incidencia)</h5>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Código incidencia</dt>
+          <dd class="col-sm-8">
+            <a href="{% url 'incidencia_detail' ultima_incidencia.pk %}">
+              {{ ultima_incidencia.codigo }}
+            </a>
+          </dd>
+
+          <dt class="col-sm-4">Título</dt>
+          <dd class="col-sm-8">{{ ultima_incidencia.titulo }}</dd>
+
+          <dt class="col-sm-4">Estado</dt>
+          <dd class="col-sm-8">{{ ultima_incidencia.get_estado_display }}</dd>
+
+          <dt class="col-sm-4">Prioridad registrada</dt>
+          <dd class="col-sm-8">{{ ultima_incidencia.get_prioridad_display }}</dd>
+
+          <dt class="col-sm-4">Fecha de reporte</dt>
+          <dd class="col-sm-8">{{ ultima_incidencia.fecha_creacion|date:"d/m/Y" }}</dd>
+
+          <dt class="col-sm-4">Técnico asignado</dt>
+          <dd class="col-sm-8">{{ ultima_incidencia.tecnico_asignado|default:"Sin asignar" }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <!-- Nota informativa -->
+    <div class="alert alert-info">
+      <strong>¿Cómo funciona?</strong> El modelo RandomForest analiza el historial de incidencias del equipo
+      (estado, técnico, temporalidad y tiempo de resolución) para estimar la probabilidad de que la
+      próxima falla sea de alta criticidad.
+    </div>
+
+  </div>
+</div>
+{% endblock %}

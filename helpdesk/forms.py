@@ -49,3 +49,15 @@ class AdjuntoForm(forms.ModelForm):
     class Meta:
         model = AdjuntoIncidencia
         fields = ['archivo']
+
+class ImportDatasetForm(forms.Form):
+    archivo = forms.FileField(
+        label='Archivo Excel (.xlsx)',
+        help_text='Selecciona el dataset de incidencias en formato Excel.',
+        widget=forms.FileInput(attrs={'accept': '.xlsx,.xls'}),
+    )
+    limpiar_datos = forms.BooleanField(
+        label='Eliminar equipos e incidencias existentes antes de importar',
+        required=False,
+        initial=False,
+    )

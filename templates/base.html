@@ -32,6 +32,13 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'reportes' %}">Reportes</a>
                     </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">ML</a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'import_dataset' %}">Importar Dataset</a></li>
+                            <li><a class="dropdown-item" href="{% url 'equipo_list' %}">Predecir Falla</a></li>
+                        </ul>
+                    </li>
                 </ul>
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
