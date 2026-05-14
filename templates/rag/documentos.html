@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2>Documentos RAG</h2>
+  <a href="{% url 'rag:upload' %}" class="btn btn-primary">+ Subir PDF</a>
+</div>
+
+<!-- Resumen -->
+<div class="row mb-4 g-3">
+  <div class="col-md-4">
+    <div class="card text-center shadow-sm border-success">
+      <div class="card-body py-3">
+        <div class="fs-3 fw-bold text-success">{{ total }}</div>
+        <small class="text-muted">Total documentos</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card text-center shadow-sm border-primary">
+      <div class="card-body py-3">
+        <div class="fs-3 fw-bold text-primary">{{ indexados }}</div>
+        <small class="text-muted">Indexados</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card text-center shadow-sm border-info">
+      <div class="card-body py-3">
+        <a href="{% url 'rag:chat' %}" class="btn btn-outline-info btn-sm">
+          Ir al Chat IA
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla -->
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Nombre</th>
+          <th>Estado</th>
+          <th>Fragmentos</th>
+          <th>Subido por</th>
+          <th>Fecha</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for doc in documentos %}
+        <tr>
+          <td>
+            <strong>{{ doc.nombre }}</strong>
+            {% if doc.archivo %}
+            <br><small class="text-muted">{{ doc.archivo.name }}</small>
+            {% endif %}
+          </td>
+          <td>
+            {% if doc.estado == 'indexado' %}
+              <span class="badge bg-success">Indexado</span>
+            {% elif doc.estado == 'indexando' %}
+              <span class="badge bg-warning text-dark">
+                <span class="spinner-border spinner-border-sm me-1"></span>Indexando
+              </span>
+            {% elif doc.estado == 'error' %}
+              <span class="badge bg-danger" title="{{ doc.error_mensaje }}">Error</span>
+              {% if doc.error_mensaje %}
+              <br><small class="text-danger">{{ doc.error_mensaje|truncatechars:60 }}</small>
+              {% endif %}
+            {% else %}
+              <span class="badge bg-secondary">{{ doc.get_estado_display }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if doc.num_chunks > 0 %}
+              <span class="badge bg-light text-dark border">{{ doc.num_chunks }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>{{ doc.subido_por|default:"—" }}</td>
+          <td><small>{{ doc.created_at|date:"d/m/Y H:i" }}</small></td>
+          <td>
+            <form method="post" action="{% url 'rag:eliminar' doc.pk %}"
+                  onsubmit="return confirm('¿Eliminar \'{{ doc.nombre }}\'? Se borrarán sus vectores.')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center py-4 text-muted">
+            No hay documentos cargados.
+            <a href="{% url 'rag:upload' %}">Subir el primero</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,4 +1,6 @@
 services:
+
+  # ── Base de datos PostgreSQL ───────────────────────────
   db:
     image: postgres:15-alpine
     container_name: helpdesk_postgres
@@ -13,10 +15,74 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U helpdesk_user -d helpdesk_db" ]
+      test: ["CMD-SHELL", "pg_isready -U helpdesk_user -d helpdesk_db"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # ── ChromaDB — Vector store para RAG ──────────────────
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: helpdesk_chromadb
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    volumes:
+      - chromadb_data:/chroma/chroma
+    environment:
+      CHROMA_SERVER_HOST: 0.0.0.0
+      ANONYMIZED_TELEMETRY: "False"
+
+  # ── Ollama — LLM local (llama3.2:1b) ──────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: helpdesk_ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Para habilitar GPU NVIDIA, descomenta:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ── Django — Aplicación web ────────────────────────────
+  web:
+    build: .
+    container_name: helpdesk_web
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - media_data:/app/media
+    env_file:
+      - .env
+    environment:
+      # Dentro de Docker, los servicios se llaman por nombre
+      DB_HOST: db
+      DB_PORT: 5432
+      CHROMADB_HOST: chromadb
+      CHROMADB_PORT: 8000
+      OLLAMA_BASE_URL: http://ollama:11434
+    depends_on:
+      db:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+      ollama:
+        condition: service_started
+
 volumes:
   pgdata:
+  chromadb_data:
+  ollama_data:
+  media_data:

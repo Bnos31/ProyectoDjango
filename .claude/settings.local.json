@@ -6,7 +6,21 @@
       "Bash(venv/Scripts/python.exe manage.py import_dataset \"C:/Users/limps/Downloads/Dataset_Grinding.xlsx\")",
       "Bash(venv/Scripts/python.exe manage.py shell -c ':*)",
       "Bash(venv/Scripts/python.exe manage.py check)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Bash(venv/Scripts/python manage.py check)",
+      "Bash(venv/Scripts/python manage.py migrate)",
+      "Bash(venv/Scripts/python manage.py runserver)",
+      "Bash(venv/Scripts/python -c \"import django; django.setup\\(\\); print\\('OK'\\)\")",
+      "Bash(DJANGO_SETTINGS_MODULE=helpdesk_project.settings venv/Scripts/python manage.py runserver --noreload)",
+      "Bash(venv/Scripts/python -c ':*)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":8000\")",
+      "Bash(grep -E \"\\\\.\\(py|yml|txt|md|env|html|css|js\\)$\")",
+      "Bash(python manage.py migrate)",
+      "Bash(pip install *)",
+      "Bash(python manage.py makemigrations rag)",
+      "Bash(python manage.py runserver)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/)"
     ]
   }
 }

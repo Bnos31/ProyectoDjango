@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- Columna principal: Chat -->
+  <div class="col-md-8">
+    <h2 class="mb-1">Consultar Manuales Técnicos</h2>
+    <p class="text-muted mb-4">
+      Haz preguntas en lenguaje natural sobre los manuales indexados.
+      La IA buscará la información relevante y te responderá.
+    </p>
+
+    {% if documentos_indexados == 0 %}
+    <div class="alert alert-warning">
+      <strong>Sin documentos indexados.</strong>
+      <a href="{% url 'rag:upload' %}" class="alert-link">Sube un PDF primero</a>
+      para poder hacer consultas.
+    </div>
+    {% endif %}
+
+    <!-- Box de consulta -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-primary text-white">
+        <h6 class="mb-0">Nueva consulta</h6>
+      </div>
+      <div class="card-body">
+        <div class="input-group mb-2">
+          <input type="text"
+                 id="input-pregunta"
+                 class="form-control form-control-lg"
+                 placeholder="Ej: ¿Cuál es el procedimiento de cambio de aceite del motor?"
+                 {% if documentos_indexados == 0 %}disabled{% endif %}>
+          <button class="btn btn-primary btn-lg"
+                  id="btn-consultar"
+                  {% if documentos_indexados == 0 %}disabled{% endif %}>
+            Consultar
+          </button>
+        </div>
+        <small class="text-muted">Presiona Enter o el botón para enviar. Documentos indexados: <strong>{{ documentos_indexados }}</strong></small>
+
+        <!-- Spinner -->
+        <div id="spinner-container" class="text-center py-4 d-none">
+          <div class="spinner-border text-primary mb-2" style="width: 3rem; height: 3rem;"></div>
+          <p class="text-muted">La IA está procesando tu consulta con Ollama (llama3.2:1b)...<br>
+          <small>Esto puede tardar 10-60 segundos dependiendo del hardware.</small></p>
+        </div>
+
+        <!-- Respuesta -->
+        <div id="respuesta-container" class="d-none mt-3">
+          <div class="card border-success">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+              <span>Respuesta de la IA</span>
+              <small id="pregunta-display" class="opacity-75"></small>
+            </div>
+            <div class="card-body">
+              <p id="respuesta-texto" class="mb-2" style="white-space: pre-wrap;"></p>
+              <div id="fuentes-container"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error -->
+        <div id="error-container" class="d-none mt-3">
+          <div class="alert alert-danger mb-0">
+            <strong>Error:</strong> <span id="error-texto"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Columna lateral: Historial -->
+  <div class="col-md-4">
+    <h5 class="mb-3">Historial reciente</h5>
+
+    {% if historial %}
+      {% for consulta in historial %}
+      <div class="card mb-2 shadow-sm">
+        <div class="card-body p-3">
+          <small class="text-muted d-block mb-1">{{ consulta.created_at|date:"d/m/Y H:i" }}</small>
+          <p class="mb-1 fw-semibold small text-dark">
+            {{ consulta.pregunta|truncatechars:90 }}
+          </p>
+          <p class="mb-0 text-muted small">
+            {{ consulta.respuesta|truncatechars:120 }}
+          </p>
+          {% with fuentes=consulta.get_fuentes %}
+          {% if fuentes %}
+          <div class="mt-1">
+            {% for f in fuentes %}
+            <span class="badge bg-light text-dark border me-1" style="font-size: 0.65rem;">
+              {{ f.documento|truncatechars:20 }} p.{{ f.pagina }}
+            </span>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% endwith %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted small">No hay consultas previas.</p>
+    {% endif %}
+
+    <a href="{% url 'rag:documentos' %}" class="btn btn-outline-secondary btn-sm w-100 mt-2">
+      Ver documentos
+    </a>
+  </div>
+
+</div>
+
+<script>
+  const consultarUrl = '{% url "rag:consultar_ajax" %}';
+  const csrfToken = '{{ csrf_token }}';
+
+  const inputPregunta = document.getElementById('input-pregunta');
+  const btnConsultar = document.getElementById('btn-consultar');
+  const spinnerContainer = document.getElementById('spinner-container');
+  const respuestaContainer = document.getElementById('respuesta-container');
+  const respuestaTexto = document.getElementById('respuesta-texto');
+  const preguntaDisplay = document.getElementById('pregunta-display');
+  const fuentesContainer = document.getElementById('fuentes-container');
+  const errorContainer = document.getElementById('error-container');
+  const errorTexto = document.getElementById('error-texto');
+
+  function resetUI() {
+    spinnerContainer.classList.add('d-none');
+    respuestaContainer.classList.add('d-none');
+    errorContainer.classList.add('d-none');
+    fuentesContainer.innerHTML = '';
+  }
+
+  async function consultar() {
+    const pregunta = inputPregunta.value.trim();
+    if (!pregunta) return;
+
+    resetUI();
+    btnConsultar.disabled = true;
+    spinnerContainer.classList.remove('d-none');
+
+    try {
+      const resp = await fetch(consultarUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({ pregunta }),
+      });
+
+      const data = await resp.json();
+      spinnerContainer.classList.add('d-none');
+      btnConsultar.disabled = false;
+
+      if (!resp.ok || data.error) {
+        errorTexto.textContent = data.error || 'Error desconocido.';
+        errorContainer.classList.remove('d-none');
+        return;
+      }
+
+      preguntaDisplay.textContent = '"' + pregunta + '"';
+      respuestaTexto.textContent = data.respuesta;
+      respuestaContainer.classList.remove('d-none');
+
+      if (data.fuentes && data.fuentes.length > 0) {
+        let html = '<small class="text-muted">Fuentes consultadas: ';
+        data.fuentes.forEach(f => {
+          html += `<span class="badge bg-secondary me-1">${f.documento} — p.${f.pagina}</span>`;
+        });
+        html += '</small>';
+        fuentesContainer.innerHTML = html;
+      }
+
+    } catch (err) {
+      spinnerContainer.classList.add('d-none');
+      btnConsultar.disabled = false;
+      errorTexto.textContent = 'Error de conexión: ' + err.message;
+      errorContainer.classList.remove('d-none');
+    }
+  }
+
+  btnConsultar.addEventListener('click', consultar);
+  inputPregunta.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') consultar();
+  });
+</script>
+{% endblock %}

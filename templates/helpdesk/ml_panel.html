@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+
+    <div class="d-flex align-items-center mb-4">
+      <h2 class="mb-0">Panel de Entrenamiento ML</h2>
+    </div>
+
+    <!-- Estado del dataset -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-secondary text-white">
+        <h6 class="mb-0">Estado del Dataset</h6>
+      </div>
+      <div class="card-body">
+        <p class="mb-0">
+          Incidencias disponibles para entrenamiento:
+          <strong class="fs-5 text-primary">{{ total_incidencias }}</strong>
+        </p>
+        {% if total_incidencias < 10 %}
+        <div class="alert alert-warning mt-2 mb-0">
+          Se recomiendan al menos 10 incidencias para un modelo confiable.
+          <a href="{% url 'import_dataset' %}" class="alert-link">Importar dataset</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Último entrenamiento -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header {% if metadata %}bg-success{% else %}bg-warning text-dark{% endif %} text-white">
+        <h6 class="mb-0">Último Entrenamiento</h6>
+      </div>
+      <div class="card-body">
+        {% if metadata %}
+        <div class="row g-3 text-center mb-3">
+          <div class="col-6 col-md-3">
+            <div class="p-3 bg-light rounded">
+              <div class="fs-4 fw-bold text-primary">{{ metadata.accuracy|floatformat:2 }}</div>
+              <small class="text-muted">Accuracy</small>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-3 bg-light rounded">
+              <div class="fs-4 fw-bold text-success">{{ metadata.precision|floatformat:2 }}</div>
+              <small class="text-muted">Precision</small>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-3 bg-light rounded">
+              <div class="fs-4 fw-bold text-info">{{ metadata.recall|floatformat:2 }}</div>
+              <small class="text-muted">Recall</small>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-3 bg-light rounded">
+              <div class="fs-4 fw-bold text-warning">{{ metadata.f1|floatformat:2 }}</div>
+              <small class="text-muted">F1-score</small>
+            </div>
+          </div>
+        </div>
+        <dl class="row mb-0 small text-muted">
+          <dt class="col-sm-5">Registros usados</dt>
+          <dd class="col-sm-7">{{ metadata.num_records }}</dd>
+          <dt class="col-sm-5">Fecha de entrenamiento</dt>
+          <dd class="col-sm-7">{{ metadata.fecha_entrenamiento }}</dd>
+        </dl>
+        {% else %}
+        <p class="text-muted mb-0">El modelo aún no ha sido entrenado.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Botón de entrenamiento -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-primary text-white">
+        <h6 class="mb-0">Entrenar Modelo</h6>
+      </div>
+      <div class="card-body">
+        <p class="text-muted">
+          El entrenamiento usa todas las incidencias de la base de datos como dataset.
+          El modelo RandomForest aprende a predecir si un equipo tendrá una falla crítica
+          en función del historial de incidencias.
+        </p>
+        <form method="post" id="form-entrenar">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="entrenar">
+          <button type="submit" class="btn btn-primary" id="btn-entrenar"
+                  {% if total_incidencias == 0 %}disabled{% endif %}>
+            Entrenar modelo ahora
+          </button>
+          {% if total_incidencias == 0 %}
+          <small class="text-danger ms-2">Importa datos primero.</small>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+
+    <!-- Acciones rápidas -->
+    <div class="d-flex gap-2">
+      <a href="{% url 'import_dataset' %}" class="btn btn-outline-secondary">Importar Dataset</a>
+      <a href="{% url 'equipo_list' %}" class="btn btn-outline-warning">Ver Predicciones</a>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  document.getElementById('form-entrenar').addEventListener('submit', function () {
+    const btn = document.getElementById('btn-entrenar');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Entrenando...';
+  });
+</script>
+{% endblock %}

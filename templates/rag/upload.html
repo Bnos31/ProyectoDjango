@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+
+    <div class="d-flex align-items-center mb-4">
+      <a href="{% url 'rag:documentos' %}" class="btn btn-outline-secondary btn-sm me-3">&larr; Documentos</a>
+      <h2 class="mb-0">Subir Manual Técnico</h2>
+    </div>
+
+    <!-- Info -->
+    <div class="alert alert-info mb-4">
+      <h6 class="alert-heading">¿Cómo funciona?</h6>
+      <ol class="mb-0 small">
+        <li>Sube un PDF (manual, ficha técnica, guía de mantenimiento)</li>
+        <li>El sistema extrae el texto y lo divide en fragmentos</li>
+        <li>Cada fragmento se convierte en un vector numérico (embedding)</li>
+        <li>Los vectores se guardan en ChromaDB para búsqueda semántica</li>
+        <li>Puedes consultar el contenido con lenguaje natural en la sección Chat</li>
+      </ol>
+    </div>
+
+    <!-- Formulario -->
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Cargar documento PDF</h5>
+      </div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data" id="form-upload">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label for="{{ form.nombre.id_for_label }}" class="form-label fw-semibold">
+              {{ form.nombre.label }}
+            </label>
+            <input type="text"
+                   name="{{ form.nombre.html_name }}"
+                   id="{{ form.nombre.id_for_label }}"
+                   class="form-control {% if form.nombre.errors %}is-invalid{% endif %}"
+                   placeholder="Ej: Manual de Mantenimiento Motor Eléctrico"
+                   required>
+            {% for error in form.nombre.errors %}
+              <div class="invalid-feedback">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <!-- Zona de carga (drag & drop visual) -->
+          <div class="mb-4">
+            <label for="{{ form.archivo.id_for_label }}" class="form-label fw-semibold">
+              {{ form.archivo.label }}
+            </label>
+            <div class="border border-2 border-dashed rounded p-4 text-center bg-light"
+                 id="drop-zone"
+                 style="cursor:pointer; border-style: dashed !important;">
+              <div id="drop-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor"
+                     class="bi bi-file-earmark-pdf text-danger mb-2" viewBox="0 0 16 16">
+                  <path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2M9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5z"/>
+                  <path d="M4.603 14.087a.81.81 0 0 1-.438-.42c-.195-.388-.13-.776.08-1.102.198-.307.526-.568.897-.787a7.7 7.7 0 0 1 1.482-.645 19.7 19.7 0 0 0 1.062-2.227 7.3 7.3 0 0 1-.43-1.295c-.086-.4-.119-.796-.046-1.136.075-.354.274-.672.65-.823.192-.077.4-.12.602-.077a.7.7 0 0 1 .477.365c.088.164.12.356.127.538.007.188-.012.396-.047.614-.084.51-.27 1.134-.52 1.794a10.954 10.954 0 0 0 .98 1.686 5.753 5.753 0 0 1 1.334.05c.364.065.734.195.96.465.12.144.193.32.2.518.007.192-.047.382-.138.563a1.04 1.04 0 0 1-.354.416.856.856 0 0 1-.51.138c-.331-.014-.654-.196-.933-.417a5.712 5.712 0 0 1-.911-.95 11.651 11.651 0 0 0-1.997.406 11.307 11.307 0 0 1-1.02 1.51c-.292.35-.609.656-.927.787a.793.793 0 0 1-.58.029"/>
+                </svg>
+                <p class="mb-1 text-muted">Arrastra un PDF aquí o</p>
+                <label for="{{ form.archivo.id_for_label }}" class="btn btn-outline-primary btn-sm">
+                  Seleccionar archivo
+                </label>
+              </div>
+              <div id="file-name" class="mt-2 text-success fw-semibold d-none"></div>
+            </div>
+            <input type="file"
+                   name="{{ form.archivo.html_name }}"
+                   id="{{ form.archivo.id_for_label }}"
+                   class="d-none {% if form.archivo.errors %}is-invalid{% endif %}"
+                   accept=".pdf"
+                   required>
+            <div class="form-text">Solo PDF. Máximo 50 MB.</div>
+            {% for error in form.archivo.errors %}
+              <div class="text-danger small mt-1">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100" id="btn-subir">
+            Subir e indexar PDF
+          </button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const fileInput = document.getElementById('{{ form.archivo.id_for_label }}');
+  const dropZone = document.getElementById('drop-zone');
+  const fileNameDiv = document.getElementById('file-name');
+  const form = document.getElementById('form-upload');
+  const btn = document.getElementById('btn-subir');
+
+  function showFileName(name) {
+    fileNameDiv.textContent = '✓ ' + name;
+    fileNameDiv.classList.remove('d-none');
+    document.getElementById('drop-icon').classList.add('d-none');
+  }
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length > 0) showFileName(fileInput.files[0].name);
+  });
+
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('border-primary');
+  });
+
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('border-primary');
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('border-primary');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const dt = new DataTransfer();
+      dt.items.add(files[0]);
+      fileInput.files = dt.files;
+      showFileName(files[0].name);
+    }
+  });
+
+  form.addEventListener('submit', () => {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Subiendo e indexando...';
+  });
+</script>
+{% endblock %}

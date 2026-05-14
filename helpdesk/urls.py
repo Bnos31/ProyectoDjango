@@ -25,5 +25,6 @@ urlpatterns = [
 
     # Machine Learning
     path('ml/import/', views.import_dataset_view, name='import_dataset'),
+    path('ml/entrenar/', views.ml_panel, name='ml_panel'),
     path('ml/predict/<int:equipo_id>/', views.predict_equipment_failure, name='predict_failure'),
 ]

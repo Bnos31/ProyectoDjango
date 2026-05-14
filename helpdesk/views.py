@@ -391,7 +391,7 @@ def predict_equipment_failure(request, equipo_id):
         messages.error(
             request,
             "El modelo ML no está entrenado todavía. "
-            "Ejecuta: python manage.py shell → from helpdesk.ml.train_model import train_model → train_model()"
+            "Ve a ML → Entrenar Modelo para entrenarlo."
         )
         return redirect('equipo_list')
 
@@ -405,6 +405,46 @@ def predict_equipment_failure(request, equipo_id):
         'ultima_incidencia': ultima_incidencia,
         'total_incidencias': total_incidencias,
         'incidencias_criticas': incidencias_criticas,
+    })
+
+
+# ============================
+# MACHINE LEARNING — PANEL DE ENTRENAMIENTO
+# ============================
+@login_required
+def ml_panel(request):
+    """Vista para entrenar el modelo ML desde la UI y ver métricas."""
+    from .ml.train_model import train_model, load_training_metadata
+
+    if not has_group(request.user, ['ADMIN', 'SUPERVISOR']):
+        messages.error(request, "Acceso denegado.")
+        return redirect('dashboard')
+
+    metadata = load_training_metadata()
+    resultado = None
+
+    if request.method == 'POST' and request.POST.get('action') == 'entrenar':
+        try:
+            resultado = train_model()
+            metadata = load_training_metadata()
+            messages.success(
+                request,
+                f"Modelo entrenado exitosamente. "
+                f"Accuracy: {resultado['accuracy']*100:.1f}% | "
+                f"F1-score: {resultado['f1']*100:.1f}%"
+            )
+        except ValueError as e:
+            messages.error(request, f"No hay datos suficientes para entrenar: {e}")
+        except Exception as e:
+            messages.error(request, f"Error durante el entrenamiento: {e}")
+
+    from helpdesk.models import Incidencia
+    total_incidencias = Incidencia.objects.count()
+
+    return render(request, 'helpdesk/ml_panel.html', {
+        'metadata': metadata,
+        'resultado': resultado,
+        'total_incidencias': total_incidencias,
     })
 
 

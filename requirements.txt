@@ -1,9 +1,19 @@
 Django==5.0.3
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.10
 django-crispy-forms==2.1
 crispy-bootstrap5==2023.10
-pillow
-pandas
-scikit-learn
-joblib
-openpyxl
+Pillow==10.4.0
+pandas==2.2.3
+scikit-learn==1.6.1
+joblib==1.4.2
+openpyxl==3.1.5
+python-decouple==3.8
+
+# RAG — LangChain + ChromaDB + Ollama
+langchain>=0.3.14,<0.4.0
+langchain-community>=0.3.14,<0.4.0
+langchain-ollama>=0.2.1,<0.3.0
+langchain-chroma>=0.1.4,<0.3.0
+chromadb>=0.6.0
+pypdf==4.3.1
+requests==2.32.3

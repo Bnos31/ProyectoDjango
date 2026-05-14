@@ -1,0 +1,1025 @@
+================================================================================
+   HELPDESK DE MANTENIMIENTO INDUSTRIAL CON IA
+   Documentacion Tecnica Completa
+   Generada: Mayo 2026
+================================================================================
+
+
+--------------------------------------------------------------------------------
+INDICE
+--------------------------------------------------------------------------------
+
+  1.  Descripcion General
+  2.  Arquitectura del Sistema
+  3.  Estructura de Archivos
+  4.  Modelos de Base de Datos
+  5.  Endpoints y URLs
+  6.  Sistema de Roles y Permisos
+  7.  Modulo HelpDesk
+  8.  Modulo Machine Learning
+  9.  Modulo RAG (Inteligencia Artificial)
+  10. Configuracion de Variables de Entorno
+  11. Infraestructura Docker
+  12. Instalacion y Puesta en Marcha
+  13. Flujos de Trabajo
+  14. Dependencias
+  15. Usuarios de Prueba
+  16. Notas de Produccion
+
+
+================================================================================
+1. DESCRIPCION GENERAL
+================================================================================
+
+Sistema web de HelpDesk para mantenimiento industrial que combina tres modulos:
+
+  [1] HELPDESK
+      Gestion completa de incidencias de equipos industriales.
+      Incluye asignacion de tecnicos, comentarios, adjuntos, auditoria y reportes.
+
+  [2] MACHINE LEARNING
+      Prediccion de fallas criticas en equipos usando RandomForest.
+      Entrenamiento desde la interfaz web, visualizacion de metricas.
+
+  [3] RAG (Retrieval-Augmented Generation)
+      Consulta de manuales tecnicos en PDF mediante lenguaje natural.
+      Usa LangChain + ChromaDB + Ollama (llama3.2:1b) ejecutado localmente.
+      No requiere APIs externas ni costos por uso.
+
+Tecnologias principales:
+  - Backend:    Django 5.0.3
+  - Base datos: PostgreSQL 15
+  - Frontend:   Bootstrap 5.3.2
+  - ML:         scikit-learn (RandomForest)
+  - RAG:        LangChain + ChromaDB + Ollama + llama3.2:1b
+  - Contenedor: Docker Compose
+
+
+================================================================================
+2. ARQUITECTURA DEL SISTEMA
+================================================================================
+
+  [ Navegador ]
+       |
+       | HTTP
+       v
+  [ Django 5.0.3 ]  ─────────────────────────────────────────────────────
+       |                                                                   |
+       |── helpdesk/   (incidencias, equipos, auditoria)                  |
+       |── helpdesk/ml/ (dataset, train, predict, model.pkl)              |
+       |── rag/         (documentos, consultas)                           |
+       |     └── services/rag_service.py                                  |
+       |                    |                                             |
+       |        ┌───────────┴─────────────┐                              |
+       |        v                         v                              |
+       |  [ ChromaDB ]            [ Ollama llama3.2:1b ]                 |
+       |  Vector store            LLM local para generacion              |
+       |  embeddings + search     y embeddings                           |
+       |                                                                  |
+       └── [ PostgreSQL 15 ]  ◄──────────────────────────────────────────
+             Todos los modelos
+             Django ORM
+
+Puertos en desarrollo local:
+  - Django:    http://localhost:8000
+  - PostgreSQL: localhost:5433
+  - ChromaDB:  localhost:8001
+  - Ollama:    localhost:11434
+
+
+================================================================================
+3. ESTRUCTURA DE ARCHIVOS
+================================================================================
+
+ProyectoDjango/
+│
+├── .env                          Variables de entorno (NO subir a git)
+├── .env.example                  Plantilla de variables de entorno
+├── .gitignore                    Archivos ignorados por git
+├── Dockerfile                    Imagen Docker para el servicio web
+├── docker-compose.yml            Orquestacion de 4 servicios
+├── manage.py                     CLI de Django
+├── requirements.txt              Dependencias Python
+│
+├── helpdesk_project/             Configuracion del proyecto Django
+│   ├── settings.py               Configuracion principal
+│   ├── urls.py                   Router raiz de URLs
+│   ├── wsgi.py                   Punto de entrada WSGI
+│   └── asgi.py                   Punto de entrada ASGI
+│
+├── helpdesk/                     App principal: HelpDesk + ML
+│   ├── models.py                 5 modelos: Equipo, Incidencia, Comentario,
+│   │                               Adjunto, AuditoriaAccion
+│   ├── views.py                  11 vistas + ml_panel
+│   ├── urls.py                   Rutas de helpdesk y ML
+│   ├── forms.py                  8 formularios
+│   ├── admin.py                  Registro en Django Admin
+│   ├── decorators.py             has_group() para control de acceso
+│   ├── apps.py                   Configuracion de la app
+│   ├── migrations/               Migraciones de base de datos
+│   │   └── 0001_initial.py
+│   ├── ml/                       Modulo de Machine Learning
+│   │   ├── dataset.py            Carga datos desde Django ORM
+│   │   ├── train_model.py        Entrenamiento RandomForest
+│   │   ├── predict.py            Inferencia sobre equipos
+│   │   ├── model.pkl             Modelo entrenado (binario)
+│   │   ├── encoders.pkl          LabelEncoders (binario)
+│   │   └── training_metadata.json Metricas del ultimo entrenamiento
+│   └── management/commands/      Comandos personalizados de Django
+│       ├── setup_roles.py        Crea grupos ADMIN/SUPERVISOR/TECNICO
+│       ├── create_test_users.py  Crea usuarios de prueba
+│       └── import_dataset.py     Importa Excel desde CLI
+│
+├── rag/                          App RAG
+│   ├── models.py                 DocumentoRAG, ConsultaRAG
+│   ├── views.py                  upload, lista, chat, eliminar, ajax
+│   ├── urls.py                   Rutas con namespace 'rag'
+│   ├── forms.py                  UploadDocumentoForm
+│   ├── admin.py                  Admin de documentos y consultas
+│   ├── apps.py                   Configuracion de la app
+│   ├── migrations/               Migraciones (generar con makemigrations)
+│   └── services/
+│       └── rag_service.py        Logica central RAG: indexar, consultar,
+│                                   eliminar vectores
+│
+└── templates/                    Plantillas HTML
+    ├── base.html                 Layout base con navbar
+    ├── login.html                Pagina de login
+    ├── dashboard.html            Dashboard principal
+    ├── helpdesk/
+    │   ├── incidencia_list.html  Lista de incidencias con filtros
+    │   ├── incidencia_detail.html Vista detalle + comentarios + adjuntos
+    │   ├── incidencia_form.html  Formulario crear incidencia
+    │   ├── equipo_list.html      Lista de equipos
+    │   ├── equipo_form.html      Formulario equipo
+    │   ├── reportes.html         Reportes y auditoria
+    │   ├── import_dataset.html   Importacion de Excel
+    │   ├── ml_panel.html         Panel de entrenamiento ML
+    │   └── predict_failure.html  Resultado de prediccion de falla
+    └── rag/
+        ├── upload.html           Subir PDF con drag & drop
+        ├── documentos.html       Lista de documentos indexados
+        └── chat.html             Interfaz de chat con la IA
+
+
+================================================================================
+4. MODELOS DE BASE DE DATOS
+================================================================================
+
+---- App: helpdesk ----
+
+  EQUIPO
+  -------
+  codigo        CharField(50)   unique - Ej: "MOT-001"
+  nombre        CharField(100)  Nombre descriptivo
+  ubicacion     CharField(100)  Nullable - Ubicacion fisica
+  activo        BooleanField    Default True
+  created_at    DateTimeField   Auto
+  updated_at    DateTimeField   Auto
+
+  INCIDENCIA
+  ----------
+  codigo        CharField(20)   unique, auto-generado: INC-000001
+  titulo        CharField(200)
+  descripcion   TextField
+  prioridad     CharField       BAJA | MEDIA | ALTA | CRITICA
+  estado        CharField       PENDIENTE | EN_PROCESO | RESUELTO | CERRADO
+  equipo        FK -> Equipo    CASCADE
+  creado_por    FK -> User      CASCADE
+  tecnico_asignado FK -> User   SET_NULL, nullable, grupo TECNICO
+  fecha_creacion DateTimeField  Auto
+  fecha_cierre  DateTimeField   Nullable, se asigna al pasar a CERRADO
+  created_at    DateTimeField   Auto
+  updated_at    DateTimeField   Auto
+
+  COMENTARIOINCIDENCIA
+  --------------------
+  incidencia    FK -> Incidencia  CASCADE
+  autor         FK -> User        CASCADE
+  comentario    TextField
+  created_at    DateTimeField     Auto
+
+  ADJUNTOINCIDENCIA
+  -----------------
+  incidencia    FK -> Incidencia  CASCADE
+  subido_por    FK -> User        CASCADE
+  archivo       FileField         Ruta: adjuntos/YYYY/MM/DD/
+  created_at    DateTimeField     Auto
+
+  AUDITORIAACCION
+  ---------------
+  usuario       FK -> User        CASCADE
+  accion        CharField(100)    CREACION_INCIDENCIA | CAMBIO_ESTADO | ASIGNACION_TECNICO
+  detalle       TextField
+  incidencia    FK -> Incidencia  SET_NULL, nullable
+  created_at    DateTimeField     Auto
+
+
+---- App: rag ----
+
+  DOCUMENTORAG
+  ------------
+  nombre        CharField(255)   Nombre descriptivo del documento
+  archivo       FileField        Ruta: documentos_rag/
+  estado        CharField        pendiente | indexando | indexado | error
+  num_chunks    IntegerField     Numero de fragmentos indexados en ChromaDB
+  error_mensaje TextField        Nullable, mensaje de error si fallo indexacion
+  subido_por    FK -> User       SET_NULL, nullable
+  created_at    DateTimeField    Auto
+  updated_at    DateTimeField    Auto
+
+  CONSULTARAG
+  -----------
+  pregunta      TextField        Pregunta del usuario
+  respuesta     TextField        Respuesta generada por Ollama
+  fuentes       TextField        JSON: [{"documento": "...", "pagina": 1}]
+  usuario       FK -> User       SET_NULL, nullable
+  created_at    DateTimeField    Auto
+
+  Metodo adicional en ConsultaRAG:
+    get_fuentes() -> list[dict]   Deserializa el campo JSON fuentes
+
+
+================================================================================
+5. ENDPOINTS Y URLS
+================================================================================
+
+---- Autenticacion ----
+
+  GET/POST  /login/               Login de usuario
+  POST      /logout/              Logout (requiere CSRF token)
+
+---- Dashboard ----
+
+  GET       /                     Dashboard (adapta por rol)
+
+---- Incidencias ----
+
+  GET       /incidencias/                Lista de incidencias
+                                          Filtros GET: ?estado=PENDIENTE&prioridad=ALTA
+  GET/POST  /incidencias/crear/           Crear incidencia (ADMIN/SUPERVISOR)
+  GET/POST  /incidencias/<pk>/            Detalle + comentar + adjuntar + actualizar
+
+---- Equipos ----
+
+  GET       /equipos/                     Lista de equipos (ADMIN/SUPERVISOR)
+  GET/POST  /equipos/crear/               Crear equipo (ADMIN/SUPERVISOR)
+  GET/POST  /equipos/<pk>/editar/          Editar equipo (ADMIN/SUPERVISOR)
+
+---- Reportes ----
+
+  GET       /reportes/                    Reportes y log de auditoria (ADMIN/SUPERVISOR)
+
+---- Machine Learning ----
+
+  GET/POST  /ml/import/                   Importar dataset Excel
+  GET/POST  /ml/entrenar/                 Panel de entrenamiento ML con metricas
+  GET       /ml/predict/<equipo_id>/      Prediccion de falla para un equipo
+
+---- RAG (namespace: 'rag') ----
+
+  GET/POST  /rag/upload/                  Subir PDF e indexar en ChromaDB
+  GET       /rag/documentos/              Lista de documentos indexados
+  POST      /rag/documentos/<pk>/eliminar/ Eliminar documento y sus vectores
+  GET       /rag/chat/                    Interfaz de chat con la IA
+  POST      /rag/api/consultar/           Endpoint AJAX para consulta RAG
+                                           Body JSON: {"pregunta": "..."}
+                                           Response JSON: {"respuesta": "...", "fuentes": [...]}
+
+---- Admin Django ----
+
+  GET       /admin/                       Panel de administracion Django
+
+
+================================================================================
+6. SISTEMA DE ROLES Y PERMISOS
+================================================================================
+
+El sistema tiene 3 grupos de usuario. Se crean con:
+  python manage.py setup_roles
+
+  ADMIN
+  -----
+  - Acceso total a todas las funciones
+  - Puede crear/editar/eliminar equipos e incidencias
+  - Puede acceder a reportes, ML y RAG
+  - Puede asignar tecnicos
+  - Puede cerrar incidencias
+
+  SUPERVISOR
+  ----------
+  - Igual que ADMIN en la mayoria de funciones
+  - Puede gestionar incidencias y equipos
+  - Puede acceder a reportes, ML y RAG
+
+  TECNICO
+  -------
+  - Solo ve las incidencias que tiene asignadas
+  - Puede cambiar estado: EN_PROCESO o RESUELTO (no puede cerrar)
+  - Puede agregar comentarios y adjuntos en sus incidencias
+  - No ve reportes, no accede a ML ni RAG
+
+Nota: Los superusuarios de Django (is_superuser=True) pasan todos los
+      controles de has_group() automaticamente.
+
+Funcion de control de acceso (decorators.py):
+  has_group(user, group_names) -> bool
+    - Acepta string o lista de strings como group_names
+    - Retorna True si el usuario es superusuario o pertenece a alguno de los grupos
+
+
+================================================================================
+7. MODULO HELPDESK
+================================================================================
+
+CICLO DE VIDA DE UNA INCIDENCIA
+---------------------------------
+
+  [ADMIN/SUP] Crea incidencia
+       | estado: PENDIENTE
+       v
+  [ADMIN/SUP] Asigna tecnico (tecnico_asignado)
+       | registro en AuditoriaAccion: ASIGNACION_TECNICO
+       v
+  [TECNICO] Actualiza a EN_PROCESO
+       | registro en AuditoriaAccion: CAMBIO_ESTADO
+       v
+  [TECNICO] Marca como RESUELTO
+       | registro en AuditoriaAccion: CAMBIO_ESTADO
+       v
+  [ADMIN/SUP] Cierra: estado = CERRADO
+       | fecha_cierre = timezone.now()
+       | registro en AuditoriaAccion: CAMBIO_ESTADO
+       v
+  [FIN]
+
+MULTI-ACCION EN /incidencias/<pk>/
+------------------------------------
+La vista acepta POST con campo 'action':
+  action=comentar   -> Agrega ComentarioIncidencia
+  action=adjuntar   -> Sube AdjuntoIncidencia (FileField)
+  action=actualizar -> Actualiza estado/prioridad/tecnico segun rol
+
+IMPORTACION DE DATASET EXCEL (/ml/import/)
+--------------------------------------------
+El Excel debe tener exactamente 12 columnas en este orden:
+  1.  ID_Activo        (codigo del equipo)
+  2.  Nombre_Equipo
+  3.  Marca_Modelo
+  4.  Ubicacion
+  5.  Fecha_Incidencia
+  6.  Tipo_Mant        (tipo de mantenimiento)
+  7.  Falla_Detectada
+  8.  Causa_Raiz
+  9.  Accion_Correctiva
+  10. Repuestos
+  11. Criticidad       (Alta | Media | Baja | Critica)
+  12. Estado           (Cerrado | Pendiente | En Proceso | Resuelto)
+
+Opciones:
+  - Checkbox "Limpiar datos": elimina todos los equipos e incidencias antes de importar
+
+REPORTES (/reportes/)
+-----------------------
+Muestra:
+  - Conteo de incidencias por estado
+  - Conteo de incidencias por tecnico asignado
+  - Conteo de incidencias por equipo
+  - Ultimas 20 entradas del log de auditoria
+
+
+================================================================================
+8. MODULO MACHINE LEARNING
+================================================================================
+
+DESCRIPCION
+-----------
+Predice si un equipo tendra una falla critica (prioridad ALTA o CRITICA)
+basandose en el historial de incidencias.
+
+Algoritmo: RandomForestClassifier de scikit-learn
+  - n_estimators: 100
+  - max_depth: 10
+  - random_state: 42
+  - class_weight: 'balanced'
+
+FEATURES USADAS PARA ENTRENAMIENTO
+------------------------------------
+  equipo             Nombre del equipo (codificado con LabelEncoder)
+  estado             Estado de la incidencia (codificado)
+  tecnico_asignado   Username o 'Sin asignar' (codificado)
+  mes_reporte        Mes de la incidencia (1-12)
+  dia_semana         Dia de la semana (0=lunes, 6=domingo)
+  dias_resolucion    Dias entre creacion y cierre (-1 si no esta cerrada)
+
+TARGET
+------
+  falla_critica      1 si prioridad es ALTA o CRITICA, 0 en caso contrario
+
+ARCHIVOS DE ARTEFACTOS (helpdesk/ml/)
+---------------------------------------
+  model.pkl               Modelo RandomForest serializado con joblib
+  encoders.pkl            Diccionario de LabelEncoders por columna categorica
+  training_metadata.json  Metricas del ultimo entrenamiento:
+    {
+      "fecha_entrenamiento": "2026-05-11T10:30:00.000000",
+      "accuracy":  0.8500,
+      "precision": 0.8450,
+      "recall":    0.8300,
+      "f1":        0.8370,
+      "num_records": 1200
+    }
+
+FLUJO DE ENTRENAMIENTO
+-----------------------
+  1. Cargar todas las incidencias desde Django ORM (dataset.py)
+  2. Limpiar NaN, codificar categoricas con LabelEncoder
+  3. Split 80% train / 20% test (stratificado)
+  4. Entrenar RandomForestClassifier
+  5. Evaluar: accuracy, precision, recall, F1
+  6. Guardar model.pkl, encoders.pkl, training_metadata.json
+
+COMO ENTRENAR EL MODELO
+------------------------
+  Opcion A (recomendada) — Desde la interfaz web:
+    Ir a: ML > Entrenar Modelo (/ml/entrenar/)
+    Hacer clic en "Entrenar modelo ahora"
+
+  Opcion B — Desde la consola Python:
+    python manage.py shell
+    >>> from helpdesk.ml.train_model import train_model
+    >>> train_model()
+
+PREDICCION DE FALLAS (/ml/predict/<equipo_id>/)
+------------------------------------------------
+Para cada equipo:
+  1. Se obtiene la incidencia mas reciente del equipo
+  2. Se extraen las features de esa incidencia
+  3. Se llama a predict_failure(data) que usa model.pkl
+  4. Se muestra probabilidad (0-100%) y nivel de riesgo:
+       Bajo:  0-30%
+       Medio: 30-70%
+       Alto:  70-100%
+
+Nota: Si el equipo no tiene incidencias, se redirige con mensaje de aviso.
+Nota: Si el modelo no esta entrenado, se redirige con mensaje de aviso.
+
+NIVELES DE RIESGO
+-----------------
+  Verde  (Bajo):   Probabilidad < 30%
+  Amarillo (Medio): Probabilidad 30-70%
+  Rojo  (Alto):   Probabilidad > 70%
+
+
+================================================================================
+9. MODULO RAG (INTELIGENCIA ARTIFICIAL)
+================================================================================
+
+DESCRIPCION
+-----------
+Permite subir manuales tecnicos en PDF y consultarlos usando lenguaje natural.
+El sistema busca los fragmentos mas relevantes en ChromaDB y genera una
+respuesta usando Ollama con el modelo llama3.2:1b localmente.
+No requiere conexion a internet ni costos por consulta.
+
+FLUJO DE INDEXACION (subir un PDF)
+------------------------------------
+  [Usuario sube PDF en /rag/upload/]
+           |
+           v
+  [Django guarda archivo en media/documentos_rag/]
+           |
+           v
+  [PyPDFLoader extrae texto de todas las paginas]
+           |
+           v
+  [RecursiveCharacterTextSplitter divide en chunks]
+     chunk_size: 1000 caracteres
+     chunk_overlap: 200 caracteres
+           |
+           v
+  [OllamaEmbeddings convierte cada chunk en vector numerico]
+     modelo: llama3.2:1b
+           |
+           v
+  [Chroma almacena vectores en ChromaDB]
+     collection: helpdesk_docs
+     metadata por chunk: documento_id, documento_nombre, page
+           |
+           v
+  [DocumentoRAG.estado = 'indexado', num_chunks = N]
+
+FLUJO DE CONSULTA (chat con la IA)
+------------------------------------
+  [Usuario escribe pregunta en /rag/chat/]
+           |
+           v (AJAX POST a /rag/api/consultar/)
+           |
+           v
+  [OllamaEmbeddings genera embedding de la pregunta]
+           |
+           v
+  [ChromaDB similarity search -> top 4 chunks relevantes]
+           |
+           v
+  [LangChain construye prompt con contexto + pregunta]
+     Prompt: "Eres un asistente tecnico... Usa el siguiente contexto..."
+           |
+           v
+  [OllamaLLM (llama3.2:1b) genera respuesta]
+     temperature: 0.1 (respuestas deterministas)
+           |
+           v
+  [ConsultaRAG guardada en BD con fuentes]
+           |
+           v
+  [Respuesta + fuentes devueltas al navegador como JSON]
+
+MODELOS DE LENGUAJE COMPATIBLES CON OLLAMA
+--------------------------------------------
+El sistema usa llama3.2:1b por defecto. Se puede cambiar en .env:
+  OLLAMA_MODEL=llama3.2:1b      (recomendado, 1.3 GB, rapido en CPU)
+  OLLAMA_MODEL=llama3.2:3b      (mas preciso, 2.0 GB)
+  OLLAMA_MODEL=mistral:7b       (mejor calidad, requiere mas RAM)
+
+TIEMPOS DE RESPUESTA ESTIMADOS
+--------------------------------
+  CPU (sin GPU):   30-120 segundos por consulta con llama3.2:1b
+  GPU NVIDIA:      3-10 segundos por consulta
+
+Para habilitar GPU en Docker, descomentar en docker-compose.yml:
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
+
+COLECCION CHROMA
+-----------------
+Nombre de coleccion: helpdesk_docs
+Todos los documentos van a la misma coleccion.
+Cada chunk lleva metadatos: documento_id (str), documento_nombre (str), page (int)
+
+ELIMINAR UN DOCUMENTO
+----------------------
+Al eliminar desde /rag/documentos/<pk>/eliminar/:
+  1. Se eliminan los vectores de ChromaDB (filtro por documento_id)
+  2. Se elimina el archivo fisico de media/documentos_rag/
+  3. Se elimina el registro DocumentoRAG de la BD
+
+ENDPOINT AJAX DE CONSULTA
+--------------------------
+POST /rag/api/consultar/
+Content-Type: application/json
+X-CSRFToken: <token>
+
+Request body:
+  {"pregunta": "Cual es el procedimiento de cambio de aceite?"}
+
+Response exitosa (200):
+  {
+    "respuesta": "Segun el manual, el procedimiento es...",
+    "fuentes": [
+      {"documento": "Manual Motor Electrico", "pagina": 5},
+      {"documento": "Manual Motor Electrico", "pagina": 8}
+    ]
+  }
+
+Response con error (400/500):
+  {"error": "Descripcion del error"}
+
+
+================================================================================
+10. CONFIGURACION DE VARIABLES DE ENTORNO
+================================================================================
+
+Archivo: .env (en la raiz del proyecto, NO subir a git)
+Libreria: python-decouple
+
+---- Variables obligatorias ----
+
+  SECRET_KEY
+    Clave secreta de Django. Cambiar en produccion.
+    Ejemplo: SECRET_KEY=mi-clave-secreta-muy-larga-y-aleatoria
+
+  DEBUG
+    True para desarrollo, False para produccion.
+    Ejemplo: DEBUG=True
+
+  ALLOWED_HOSTS
+    Hosts permitidos, separados por coma.
+    Ejemplo: ALLOWED_HOSTS=localhost,127.0.0.1,mi-dominio.com
+
+---- Base de datos ----
+
+  DB_NAME       Nombre de la base de datos      (default: helpdesk_db)
+  DB_USER       Usuario de PostgreSQL            (default: helpdesk_user)
+  DB_PASSWORD   Contrasena de PostgreSQL         (default: helpdesk_pass)
+  DB_HOST       Host del servidor                (default: 127.0.0.1)
+  DB_PORT       Puerto del servidor              (default: 5433)
+
+  En Docker, el servicio web sobreescribe:
+    DB_HOST=db
+    DB_PORT=5432
+
+---- RAG (ChromaDB + Ollama) ----
+
+  CHROMADB_HOST    Host de ChromaDB             (default: localhost)
+  CHROMADB_PORT    Puerto de ChromaDB           (default: 8001)
+  OLLAMA_BASE_URL  URL base de Ollama           (default: http://localhost:11434)
+  OLLAMA_MODEL     Modelo de lenguaje a usar    (default: llama3.2:1b)
+
+  En Docker, el servicio web sobreescribe:
+    CHROMADB_HOST=chromadb
+    CHROMADB_PORT=8000
+    OLLAMA_BASE_URL=http://ollama:11434
+
+---- Archivo .env para desarrollo local ----
+
+  SECRET_KEY=django-insecure-=y1d2*30l45^...
+  DEBUG=True
+  ALLOWED_HOSTS=localhost,127.0.0.1
+  DB_NAME=helpdesk_db
+  DB_USER=helpdesk_user
+  DB_PASSWORD=helpdesk_pass
+  DB_HOST=127.0.0.1
+  DB_PORT=5433
+  CHROMADB_HOST=localhost
+  CHROMADB_PORT=8001
+  OLLAMA_BASE_URL=http://localhost:11434
+  OLLAMA_MODEL=llama3.2:1b
+
+
+================================================================================
+11. INFRAESTRUCTURA DOCKER
+================================================================================
+
+SERVICIOS EN docker-compose.yml
+---------------------------------
+
+  db (postgres:15-alpine)
+  -----------------------
+  Container:   helpdesk_postgres
+  Puerto host: 5433 -> 5432 interno
+  Volumen:     pgdata:/var/lib/postgresql/data
+  Healthcheck: pg_isready cada 10s
+  Variables:   POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, TZ
+
+  chromadb (chromadb/chroma:latest)
+  ----------------------------------
+  Container:   helpdesk_chromadb
+  Puerto host: 8001 -> 8000 interno
+  Volumen:     chromadb_data:/chroma/chroma
+  Variables:   CHROMA_SERVER_HOST=0.0.0.0, ANONYMIZED_TELEMETRY=False
+
+  ollama (ollama/ollama:latest)
+  ------------------------------
+  Container:   helpdesk_ollama
+  Puerto host: 11434 -> 11434 interno
+  Volumen:     ollama_data:/root/.ollama
+  Nota:        El modelo llama3.2:1b se debe descargar manualmente
+               despues de levantar el contenedor.
+
+  web (build: .)
+  ---------------
+  Container:   helpdesk_web
+  Puerto host: 8000 -> 8000 interno
+  Volumen:     .:/app (codigo fuente), media_data:/app/media (uploads)
+  Archivo env: .env
+  Variables override: DB_HOST=db, CHROMADB_HOST=chromadb, etc.
+  Dependencias: espera que db este healthy, chromadb y ollama esten started
+  Comando: migrate && runserver
+
+VOLUMENES PERSISTENTES
+-----------------------
+  pgdata         Datos de PostgreSQL
+  chromadb_data  Vectores de ChromaDB
+  ollama_data    Modelos de Ollama descargados
+  media_data     Archivos subidos por usuarios (PDFs, adjuntos)
+
+IMAGEN DOCKER (Dockerfile)
+---------------------------
+  Base: python:3.11-slim
+  Build: instala build-essential y libpq-dev, luego pip install requirements.txt
+  Crea: media/documentos_rag/, media/adjuntos/, staticfiles/
+  Expone: puerto 8000
+  CMD: python manage.py runserver 0.0.0.0:8000
+
+NETWORKING
+----------
+Todos los servicios estan en la red por defecto de Docker Compose.
+Los servicios se comunican por nombre de contenedor:
+  web -> db (puerto 5432)
+  web -> chromadb (puerto 8000)
+  web -> ollama (puerto 11434)
+
+
+================================================================================
+12. INSTALACION Y PUESTA EN MARCHA
+================================================================================
+
+---- OPCION A: DESARROLLO LOCAL (recomendada para desarrollo) ----
+
+  Prerequisitos:
+    - Python 3.11+
+    - Docker Desktop instalado y corriendo
+    - pip actualizado
+
+  Paso 1: Clonar o posicionarse en el directorio del proyecto
+    cd ProyectoDjango
+
+  Paso 2: Crear entorno virtual (si no existe)
+    python -m venv venv
+    venv\Scripts\activate          (Windows)
+    source venv/bin/activate       (Linux/Mac)
+
+  Paso 3: Instalar dependencias
+    pip install -r requirements.txt
+
+  Paso 4: Configurar variables de entorno
+    Copiar .env.example como .env
+    cp .env.example .env
+    (Editar .env si es necesario)
+
+  Paso 5: Levantar servicios de base de datos e IA
+    docker compose up db chromadb ollama -d
+
+  Paso 6: Descargar el modelo Ollama (solo la primera vez, ~1.3 GB)
+    docker exec helpdesk_ollama ollama pull llama3.2:1b
+
+  Paso 7: Crear tablas en la base de datos
+    python manage.py makemigrations rag
+    python manage.py migrate
+
+  Paso 8: Crear roles y usuarios de prueba
+    python manage.py setup_roles
+    python manage.py create_test_users
+
+  Paso 9: Iniciar el servidor Django
+    python manage.py runserver
+
+  Acceder en: http://localhost:8000
+
+
+---- OPCION B: DOCKER COMPLETO ----
+
+  Prerequisitos:
+    - Docker Desktop instalado y corriendo
+
+  Paso 1: Asegurarse de tener el archivo .env en la raiz
+    (Copiar de .env.example si no existe)
+
+  Paso 2: Construir y levantar todos los servicios
+    docker compose up --build
+
+  Paso 3: Descargar el modelo Ollama (solo la primera vez)
+    (En otra terminal, mientras los contenedores estan corriendo)
+    docker exec helpdesk_ollama ollama pull llama3.2:1b
+
+  Paso 4: Crear roles y usuarios (solo la primera vez)
+    docker exec helpdesk_web python manage.py setup_roles
+    docker exec helpdesk_web python manage.py create_test_users
+
+  Acceder en: http://localhost:8000
+
+  Para ver logs:
+    docker compose logs -f web
+    docker compose logs -f ollama
+
+  Para detener:
+    docker compose down
+
+  Para detener y eliminar datos (DESTRUCTIVO):
+    docker compose down -v
+
+
+================================================================================
+13. FLUJOS DE TRABAJO
+================================================================================
+
+---- FLUJO 1: GESTIONAR UNA INCIDENCIA ----
+
+  1. Ingresar como ADMIN o SUPERVISOR
+  2. Ir a Incidencias > Nueva incidencia
+  3. Completar: titulo, descripcion, prioridad, equipo
+  4. En el detalle de la incidencia:
+     - Asignar tecnico en "Actualizar"
+     - El tecnico recibe la incidencia en su panel
+  5. El TECNICO inicia sesion y:
+     - Ve solo sus incidencias en el dashboard
+     - Cambia estado a EN_PROCESO cuando comienza
+     - Agrega comentarios con avances
+     - Cambia estado a RESUELTO cuando termina
+  6. El ADMIN/SUPERVISOR cierra la incidencia (CERRADO)
+     - Se registra automaticamente fecha_cierre
+
+
+---- FLUJO 2: PREDICCION DE FALLAS CON ML ----
+
+  Primera vez:
+  1. Importar dataset en ML > Importar Dataset (archivo Excel)
+  2. Ir a ML > Entrenar Modelo y hacer clic en "Entrenar modelo ahora"
+  3. Ver metricas de accuracy, precision, recall y F1
+
+  Para predecir:
+  1. Ir a Equipos
+  2. Hacer clic en "Predecir Falla" del equipo deseado
+  3. Ver probabilidad de falla critica y nivel de riesgo
+
+
+---- FLUJO 3: CONSULTAR MANUALES CON IA ----
+
+  Primera vez:
+  1. Asegurarse de que Ollama esta corriendo y el modelo esta descargado:
+     docker exec helpdesk_ollama ollama list
+     (Debe aparecer llama3.2:1b)
+  2. Ir a RAG IA > Subir Manual PDF
+  3. Escribir un nombre descriptivo y seleccionar el PDF
+  4. Hacer clic en "Subir e indexar PDF"
+  5. Esperar a que el estado cambie a "Indexado"
+
+  Para consultar:
+  1. Ir a RAG IA > Consultar IA
+  2. Escribir la pregunta en lenguaje natural
+  3. Presionar Enter o clic en "Consultar"
+  4. Esperar la respuesta (10-120 segundos segun hardware)
+  5. Ver la respuesta y las fuentes citadas (paginas del manual)
+
+
+================================================================================
+14. DEPENDENCIAS
+================================================================================
+
+---- requirements.txt ----
+
+  Django==5.0.3               Framework web principal
+  psycopg2-binary==2.9.9      Driver PostgreSQL para Python
+  django-crispy-forms==2.1    Formularios Bootstrap en Django
+  crispy-bootstrap5==2023.10  Pack Bootstrap 5 para crispy-forms
+  Pillow==10.4.0              Procesamiento de imagenes
+  pandas==2.2.2               Manipulacion de datos (dataset Excel)
+  scikit-learn==1.5.1         Machine Learning (RandomForest)
+  joblib==1.4.2               Serializacion del modelo ML
+  openpyxl==3.1.5             Lectura de archivos Excel .xlsx
+  python-decouple==3.8        Gestion de variables de entorno
+
+  # RAG
+  langchain==0.3.7            Framework de IA y cadenas
+  langchain-community==0.3.7  Integraciones: PyPDFLoader, etc.
+  langchain-ollama==0.2.1     Integracion con Ollama (embeddings + LLM)
+  langchain-chroma==0.1.4     Integracion con ChromaDB
+  chromadb==0.5.18            Cliente de ChromaDB (vector store)
+  pypdf==4.3.1                Lectura de archivos PDF
+  requests==2.32.3            HTTP client (health checks)
+
+---- Imagenes Docker ----
+
+  postgres:15-alpine          Base de datos relacional
+  chromadb/chroma:latest      Vector store para embeddings
+  ollama/ollama:latest        Servidor de LLM local
+
+
+================================================================================
+15. USUARIOS DE PRUEBA
+================================================================================
+
+Creados con: python manage.py create_test_users
+
+  Usuario: admin_user
+  Contrasena: Admin1234!
+  Grupo: ADMIN
+  is_staff: True
+
+  Usuario: supervisor_user
+  Contrasena: Super1234!
+  Grupo: SUPERVISOR
+
+  Usuario: tecnico_user
+  Contrasena: Tecnico1234!
+  Grupo: TECNICO
+
+Panel de administracion Django:
+  Acceder con admin_user (is_staff=True)
+  URL: http://localhost:8000/admin/
+
+Nota: Para acceder al panel de admin, primero ejecutar:
+  python manage.py createsuperuser
+O dar permisos is_staff e is_superuser a admin_user desde el shell:
+  python manage.py shell
+  >>> from django.contrib.auth.models import User
+  >>> u = User.objects.get(username='admin_user')
+  >>> u.is_superuser = True
+  >>> u.save()
+
+
+================================================================================
+16. NOTAS DE PRODUCCION
+================================================================================
+
+SEGURIDAD (antes de desplegar en produccion)
+----------------------------------------------
+
+  1. Cambiar SECRET_KEY por una clave larga y aleatoria:
+       python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+
+  2. Establecer DEBUG=False en .env
+
+  3. Configurar ALLOWED_HOSTS con el dominio real:
+       ALLOWED_HOSTS=mi-dominio.com,www.mi-dominio.com
+
+  4. Cambiar DB_PASSWORD por una contrasena segura
+
+  5. Configurar HTTPS:
+       Agregar en settings.py:
+         SECURE_SSL_REDIRECT = True
+         SESSION_COOKIE_SECURE = True
+         CSRF_COOKIE_SECURE = True
+         SECURE_HSTS_SECONDS = 31536000
+
+  6. Ejecutar collectstatic para archivos estaticos:
+       python manage.py collectstatic
+       Configurar Nginx para servir /static/ y /media/
+
+  7. Usar Gunicorn en lugar de runserver:
+       gunicorn helpdesk_project.wsgi:application --bind 0.0.0.0:8000
+
+RENDIMIENTO
+-----------
+  - Agregar paginacion a IncidenciaListView (actualmente sin limite)
+  - Configurar cache (Redis) para el modelo ML en produccion
+  - Considerar Celery para indexacion de PDFs en background
+  - Para mejor calidad RAG, usar un modelo de embeddings dedicado:
+      nomic-embed-text (ollama pull nomic-embed-text)
+
+BACKUP
+------
+  Base de datos:
+    docker exec helpdesk_postgres pg_dump -U helpdesk_user helpdesk_db > backup.sql
+
+  Vectores ChromaDB:
+    Los datos estan en el volumen chromadb_data
+    docker run --rm -v chromadb_data:/data -v $(pwd):/backup alpine tar czf /backup/chroma_backup.tar.gz /data
+
+  Modelos Ollama:
+    Los modelos descargados estan en el volumen ollama_data
+    (Son grandes, ~1.3 GB para llama3.2:1b)
+
+LOGS
+----
+  Logs de Django:  docker compose logs -f web
+  Logs de Ollama:  docker compose logs -f ollama
+  Logs de ChromaDB: docker compose logs -f chromadb
+
+
+================================================================================
+REFERENCIA RAPIDA DE COMANDOS
+================================================================================
+
+  # Instalar dependencias
+  pip install -r requirements.txt
+
+  # Levantar solo los servicios de IA (para desarrollo local)
+  docker compose up db chromadb ollama -d
+
+  # Levantar todo en Docker
+  docker compose up --build
+
+  # Descargar modelo Ollama (solo primera vez)
+  docker exec helpdesk_ollama ollama pull llama3.2:1b
+
+  # Migraciones
+  python manage.py makemigrations rag
+  python manage.py migrate
+
+  # Configuracion inicial
+  python manage.py setup_roles
+  python manage.py create_test_users
+
+  # Servidor de desarrollo
+  python manage.py runserver
+
+  # Importar dataset desde CLI
+  python manage.py import_dataset ruta/al/archivo.xlsx
+  python manage.py import_dataset ruta/al/archivo.xlsx --clear
+
+  # Entrenar modelo desde consola
+  python manage.py shell
+  >>> from helpdesk.ml.train_model import train_model
+  >>> train_model()
+
+  # Ver logs en Docker
+  docker compose logs -f web
+  docker compose logs -f ollama
+
+  # Detener Docker
+  docker compose down
+
+  # Detener Docker eliminando volumenes (DESTRUCTIVO)
+  docker compose down -v
+
+
+================================================================================
+FIN DE LA DOCUMENTACION
+================================================================================
